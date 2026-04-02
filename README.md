@@ -4,52 +4,54 @@ Compact, production-minded local Python prototype for legal research QA on **Cox
 
 This repository is intentionally scoped for a senior-engineer take-home: no UI, no auth, no cloud infra; strong focus on retrieval quality, grounding, prompt governance, and graceful failure behavior.
 
+Stretch improvement included: a lightweight post-generation claim-to-evidence verification step so citations are not only present, but checked for support of the material answer claim.
+
 ## Architecture
 
 Pipeline:
 1. **Ingest (`src/ingest.py`)**: parse PDF page-by-page, normalize text, preserve source metadata, detect coarse legal sections.
-2. **Chunk (`src/chunking.py`)**: split by paragraph with section continuity and overlap; preserve legal context in chunk metadata.
+2. **Chunk (`src/chunking.py`)**: split by paragraph with section continuity and overlap.
 3. **Index (`src/index.py`)**: build hybrid retrieval indexes:
    - BM25 lexical index
    - semantic embedding index (sentence-transformers when available, deterministic fallback otherwise)
-4. **Retrieve (`src/retrieve.py`)**: hybrid retrieval + reciprocal-rank fusion, score exposure, metadata filter hooks.
-5. **Answer (`src/answer.py`)**: prompt-charter-governed, citation-grounded, structured output with failure/ambiguity handling.
-6. **Evaluate (`src/eval.py`)**: lightweight regression harness over curated legal questions.
+4. **Retrieve (`src/retrieve.py`)**: hybrid retrieval + reciprocal-rank fusion + lightweight legal reranking.
+5. **Answer (`src/answer.py`)**: citation-grounded answer generation.
+6. **Verify (`src/answer.py`)**: lightweight claim-to-evidence check over generated claim sentence(s) vs cited snippets (`supported` / `partially_supported` / `unsupported`).
+7. **Evaluate (`src/eval.py`)**: regression harness over curated legal questions, including verification status checks.
 
 ## Repository Layout
 
-```
+```text
 .
 ├── data/
 │   ├── raw/
-│   │   └── cox_v_sony.pdf
+│   │   └── cox_v_sony_ocr.pdf
 │   └── processed/
 ├── prompts/
 │   └── prompt_charter_v1.yaml
 ├── src/
 │   ├── __init__.py
-│   ├── config.py
-│   ├── schemas.py
-│   ├── ingest.py
-│   ├── chunking.py
-│   ├── index.py
-│   ├── retrieve.py
 │   ├── answer.py
-│   ├── llm.py
+│   ├── chunking.py
+│   ├── config.py
 │   ├── eval.py
-│   ├── utils.py
-│   └── main.py
-├── examples/
-│   └── sample_outputs.md
+│   ├── index.py
+│   ├── ingest.py
+│   ├── llm.py
+│   ├── main.py
+│   ├── retrieve.py
+│   ├── schemas.py
+│   └── utils.py
 ├── tests/
 │   └── test_eval_smoke.py
+├── examples/
+│   └── sample_outputs.md
+├── .env.example
+├── DESIGN_NOTE.md
+├── Makefile
 ├── eval_cases.json
 ├── README.md
-├── README_EXPLAINED.md
-├── DESIGN_NOTE.md
-├── requirements.txt
-├── .env.example
-└── Makefile
+└── requirements.txt
 ```
 
 ## Setup
@@ -63,102 +65,87 @@ make install
 cp .env.example .env
 ```
 
-Place source corpus at:
-- `data/raw/cox_v_sony.pdf`
-
 Optional (better semantic retrieval, heavier install):
+
 ```bash
 pip install sentence-transformers
 ```
 
 ## Run
 
+### Option A: use your current corpus filename (`cox_v_sony_ocr.pdf`)
+
 ```bash
+python -m src.ingest --pdf data/raw/cox_v_sony_ocr.pdf
+python -m src.index
+python -m src.main --question "What are the two ways the Court says intent can be shown for contributory copyright infringement in Cox v. Sony?"
+python -m src.eval
+python -m pytest -q
+```
+
+### Option B: use default ingest path from code
+
+`src/config.py` defaults to `data/raw/cox_v_sony.pdf`.
+If you want to use `make ingest` without arguments, rename or copy your PDF to that path.
+
+## Makefile Commands
+
+```bash
+make install
 make ingest
 make index
-python -m src.main --question "What are the two ways the Court says intent can be shown for contributory copyright infringement in Cox v. Sony?"
+make ask Q="What are the two ways intent can be shown?"
 make eval
 make test
 ```
 
-## Corpus and Metadata
+Note: `make ingest` uses the default path from `src/config.py`.
 
-Ingestion creates normalized JSONL (`data/processed/documents.jsonl`) with fields including:
-- `doc_id`, `title`, `source_path`, `source_type`
-- `court`, `jurisdiction`, `date`, `document_type`
-- `page_start`, `page_end`, `section_label`, `text`
+## Environment Variables
 
-Chunking creates `data/processed/chunks.jsonl` with legal-aware metadata:
-- `chunk_id`, `doc_id`, `section_path`
-- `page_span`, `paragraph_span`
-- `char_start`, `char_end`, `text`
+Defined in `.env.example`:
 
-## Retrieval Strategy
+- `LLM_PROVIDER` (`mock` or `openai`; default code fallback is `mock`)
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL` (default `gpt-4o-mini`)
+- `EMBEDDING_MODEL` (default `all-MiniLM-L6-v2`)
+- `TOP_K` (default `6`)
 
-Hybrid retrieval is used for narrow legal QA:
-- BM25 catches exact statutory/doctrinal terms
-- semantic retrieval improves recall for paraphrased legal phrasing
-- reciprocal-rank fusion merges both signals
-
-Returned hits expose:
-- `lexical_score`
-- `semantic_score`
-- `fused_score`
-
-A metadata-aware filter hook supports future constraints (e.g., section-level retrieval only).
-
-## Prompt Charter
-
-`prompts/prompt_charter_v1.yaml` separates prompt governance from code:
-- input/output contracts
-- citation policy
-- guardrails
-- ambiguity handling
-- insufficient/conflicting evidence behavior
-
-This makes behavior explicit, versionable, and interview-auditable.
+`LLM_PROVIDER=openai` is only used when `OPENAI_API_KEY` is set; otherwise the system falls back to mock generation.
 
 ## Output Contract
 
-Structured response schema:
+`src/main.py` prints JSON in this shape:
+
 - `answer: string`
-- `citations: list[{source_title, doc_id, chunk_id, page_span, evidence_snippet}]`
+- `citations: list[{source_title, doc_id, chunk_id, section_label, page_span, evidence_snippet}]`
 - `confidence: high|medium|low`
-- `failure_reason: optional string`
+- `failure_reason: null|ambiguous_question|insufficient_evidence|out_of_scope|conflicting_evidence|unsupported_claim`
 - `needs_clarification: bool`
+- `claim_verification: null|{status, checked_claims[]}`
+  - `status: supported|partially_supported|unsupported`
+  - `checked_claims[]: {claim, status, supporting_chunk_ids[]}`
 
-## Failure Modes
-
-Implemented graceful behavior:
-- ambiguous question -> asks for narrowing (`needs_clarification=true`)
-- weak retrieval / insufficient support -> declines with explanation
-- low-support cases -> reduced confidence
+Behavioral guardrail:
+- `supported`: normal answer path
+- `partially_supported`: answer kept, confidence downgraded one level
+- `unsupported`: graceful decline (`failure_reason=unsupported_claim`, low confidence)
 
 ## Evaluation
 
-`eval_cases.json` includes the six narrow assignment questions plus one ambiguous question.
+`eval_cases.json` currently includes:
 
-`src/eval.py` reports:
-- pass/fail per case
-- answer/decline/clarification behavior
-- citation presence
-- retrieval-hit check (when expected doc IDs are provided)
+- doctrinal QA cases (`q1` to `q6`)
+- one ambiguity case (`q7_ambiguous`)
+- one out-of-scope decline case (`q8_out_of_scope`)
+- one verification guardrail case where a mismatched doctrinal claim should not pass as supported (`q9_verification_guardrail`)
 
-## Limitations
+`src/eval.py` reports `total`, `passed`, `failed`, and per-case diagnostics.
 
-- single-case starter corpus
-- coarse section detection based on textual hints
-- fallback semantic embeddings are lightweight, not SOTA
-- no learned reranker yet
-- no long-context quote pinning / citation span alignment beyond chunk snippets
+## Notes and Limitations
 
-## Productionization Notes
-
-If extended to production:
-- multi-document parser normalization + citation parser
-- stronger legal section segmentation (layout-aware parsing)
-- reranker tuned for legal answer-bearing evidence
-- quote-level citation anchors with exact offsets
-- provenance/audit logs + model/prompt version pinning
-- tenant-aware indexing, auth, and observability
-# legal_rag
+- Single-case starter corpus
+- Coarse section detection from textual cues
+- Optional semantic encoder dependency (`sentence-transformers`)
+- No learned reranker or quote-level citation offsets yet
+- Verification is intentionally lightweight (heuristic overlap + legal term cues), not a full entailment subsystem
