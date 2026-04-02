@@ -2,7 +2,7 @@
 
 Compact, production-minded local Python prototype for legal research QA on **Cox Communications, Inc. v. Sony Music Entertainment, 607 U.S. ___ (2026)**.
 
-This repository is intentionally scoped for a senior-engineer take-home: no UI, no auth, no cloud infra; strong focus on retrieval quality, grounding, prompt governance, and graceful failure behavior.
+This repository is intentionally focused on strong retrieval quality, grounding, prompt governance, and graceful failure behavior. No UI, no auth, no cloud infra;
 
 Stretch improvement included: a lightweight post-generation claim-to-evidence verification step so citations are not only present, but checked for support of the material answer claim.
 
