@@ -1,0 +1,76 @@
+[
+  {
+    "id": "q1",
+    "question": "Under the Supreme Court's holding in Cox v. Sony, is an internet service provider contributorily liable merely because it knows some subscribers use its service to infringe copyrights?",
+    "should_answer": true,
+    "must_include_citations": true,
+    "expected_doc_ids": []
+  },
+  {
+    "id": "q2",
+    "question": "What are the two ways the Court says a copyright owner can show the intent required for contributory copyright infringement in Cox v. Sony?",
+    "should_answer": true,
+    "must_include_citations": true,
+    "expected_doc_ids": [],
+    "preferred_section_labels": ["majority_opinion", "syllabus"],
+    "require_readable_snippets": true,
+    "required_rule_terms": ["two ways", "affirmatively induced", "tailored to infringement"],
+    "allowed_confidence": ["high", "medium"],
+    "expected_verification_statuses": ["supported"]
+  },
+  {
+    "id": "q3",
+    "question": "Why did the Court conclude that Cox did not induce its subscribers' copyright infringement?",
+    "should_answer": true,
+    "must_include_citations": true,
+    "expected_doc_ids": []
+  },
+  {
+    "id": "q4",
+    "question": "Why did the Court conclude that Cox's internet service was not a service tailored to infringement?",
+    "should_answer": true,
+    "must_include_citations": true,
+    "expected_doc_ids": []
+  },
+  {
+    "id": "q5",
+    "question": "How did the Court treat the Fourth Circuit's rule that supplying a product with knowledge it will be used to infringe can be enough for contributory infringement?",
+    "should_answer": true,
+    "must_include_citations": true,
+    "expected_doc_ids": []
+  },
+  {
+    "id": "q6",
+    "question": "According to Cox v. Sony, what role does the DMCA safe-harbor provision play in the Court's analysis of contributory liability?",
+    "should_answer": true,
+    "must_include_citations": true,
+    "expected_doc_ids": []
+  },
+  {
+    "id": "q7_ambiguous",
+    "question": "What is the legal standard in this case?",
+    "should_request_clarification": true,
+    "should_answer": false,
+    "must_include_citations": false,
+    "expected_doc_ids": []
+  },
+  {
+    "id": "q8_out_of_scope",
+    "question": "What country lives Neymar Jr?",
+    "should_decline": true,
+    "should_answer": false,
+    "must_include_citations": false,
+    "allowed_confidence": ["low"],
+    "expected_failure_reasons": ["insufficient_evidence", "out_of_scope"]
+  },
+  {
+    "id": "q9_verification_guardrail",
+    "question": "According to Cox v. Sony, what is the complete three-part test for contributory copyright infringement?",
+    "should_decline": true,
+    "should_answer": false,
+    "must_include_citations": false,
+    "allowed_confidence": ["low"],
+    "expected_failure_reasons": ["unsupported_claim", "insufficient_evidence"],
+    "expected_verification_statuses": ["partially_supported", "unsupported"]
+  }
+]
